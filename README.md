@@ -80,7 +80,17 @@ so the options above reduce them. `--fitness-splits all` computes each
 fitness on all ten validation samples instead of one (see item 9 below). Both
 commands print a one-line summary and
 write every intermediate number to the JSON file. Seeds are fixed (`--seed`,
-default 0), so a run gives the same result every time on the same machine.
+default 0), and results are the same on every machine (item 13 below).
+
+A GE-TCTN run at the thesis budget takes hours, so `validation/run_units.py`
+splits it into one job per GE run, runs them in parallel, skips the ones
+already finished, and collects them into the same JSON format:
+
+```bash
+python validation/run_units.py plan units.jsonl CSTR.arff
+python validation/run_units.py run data units.jsonl units_out --jobs 4
+python validation/run_units.py collect units_out results
+```
 
 ## Validation
 
@@ -89,8 +99,7 @@ available: CSTR, Tr11, Tr12, Tr23 and Oh15. Their sizes match thesis Table 5
 (299, 414, 313, 204 and 913 documents; the term counts differ by one because
 the class attribute is not counted here). All numbers are weighted F1 on the
 test documents, averaged over ten random samples; thesis values come from
-Tables 6 and 10. `validation/run.sh` reproduces everything below in about 18
-minutes of CPU.
+Tables 6 and 10. `validation/run.sh` reproduces everything below.
 
 Grid-TCTN uses exactly the protocol of the thesis (five measures, 25 values of
 k and alpha, ten samples):
@@ -112,39 +121,10 @@ mean, while here the five measures all give 0.39 to 0.40. The random samples dif
 ones, and items 2, 3 and 7 of the list below may differ from the original
 code; any of these can move a mean on collections this small.
 
-GE-TCTN was run with smaller budgets than in the thesis, which used population
-100, 100 generations and ten runs for each of the 25 values of (k, alpha):
-
-| collection | GE budget and fitness | thesis best / mean (sd) | best run by validation | best run by test | mean of runs (sd) |
-|---|---|---|---|---|---|
-| CSTR | pop 50, 30 gen, 15 (k, alpha), one sample | 0.7760 / 0.7467 (0.0110) | 0.6628 | 0.7253 | 0.6592 (0.0534) |
-| CSTR | pop 50, 30 gen, k=1 and 3 alphas, ten samples | 0.7760 / 0.7467 (0.0110) | 0.7440 | 0.7440 | 0.7147 (0.0220) |
-| CSTR | pop 100, 100 gen, k=1, alpha=0.7, ten samples | 0.7760 / 0.7467 (0.0110) | 0.7224 | 0.7224 | 0.7134 (0.0074) |
-| Oh15 | pop 50, 30 gen, 9 (k, alpha), one sample | 0.7233 / 0.7170 (0.0062) | 0.7067 | 0.7088 | 0.6930 (0.0144) |
-| Tr23 | pop 30, 20 gen, k=1 and 3 alphas, one sample | 0.5305 / 0.5112 (0.0246) | 0.3346 | 0.4584 | 0.4087 (0.0694) |
-
-The thesis result is not reproduced in size. In the thesis, GE-TCTN beats
-Grid-TCTN on 35 of 37 collections, by 0.03 on CSTR (best run) and by 0.10 on
-Tr23. Here, with the fitness computed on one sample per run, GE-TCTN is below
-Grid-TCTN on all three collections tried, both for the run with the best
-validation fitness and for the mean of the runs; only the best run judged on
-test data is above it, on CSTR and Tr23. The cause is visible in the logs:
-on CSTR the evolved functions reach a fitness of about 0.85 on the 28
-validation documents of their own sample but only 0.70 on the validation
-documents of all ten samples, so the search fits the noise of a very
-small validation set. When the fitness is the mean over the ten samples,
-which is how the thesis chooses the Grid-TCTN settings, GE-TCTN matches or
-slightly beats Grid-TCTN on CSTR (mean 0.713 to 0.715, best 0.722 to 0.744,
-against 0.712), the same direction as the thesis but a smaller gain. The
-validation documents of one sample are test documents of another, so this
-variant selects with slightly more information than a strict hold-out would
-give; Grid-TCTN is selected the same way.
-
-The likely reasons for the remaining gap are the reduced GE budgets, the
-fitness question above, the reading of "best of 10 runs" (item 10), and the
-choices listed below. Several evolved functions are worth a look: on Oh15 the
-best function was p(¬ti,¬tj) - p(¬ti)p(¬tj), and on CSTR one run found
-p(¬ti)p(tj) - p(¬ti,tj); both are algebraically equal to Piatetsky-Shapiro.
+GE-TCTN at the thesis budget (population 100, 100 generations, ten runs for
+each of the 25 values of (k, alpha), fitness averaged over the ten validation
+samples) on CSTR, Oh15 and Tr23 is running; its table will go here. Tr11 and
+Tr12 are left out of the GE comparison because of its cost.
 
 ## Deviations and assumptions
 
@@ -201,6 +181,14 @@ code. These are the places where this reimplementation had to choose.
     0.10. Fitness values are cached by phenotype.
 12. The power operator is the real power; a negative base with a
     non-integer exponent gives an undefined value (see item 4).
+13. Results must not depend on the machine. Different platforms' math
+    libraries and solvers differ in the last bits, and an evolutionary search
+    amplifies any such difference into a different run. So k-NN ties go to the
+    lowest term index, proximities and document scores are compared after
+    rounding to 30 mantissa bits (about 9 significant digits), and F1 values
+    and means are summed with exactly rounded arithmetic. With these rules two
+    full-size GE runs gave identical results, to the last bit, on an arm64 Mac
+    and on x86_64 Linux. The thesis does not discuss ties.
 
 Not reimplemented: the EM and document-network LLGC baselines of thesis
 Table 6, and the Friedman and Li tests.
