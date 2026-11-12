@@ -36,22 +36,35 @@ def cooccurrence_stats(X: sp.csr_matrix) -> dict[str, np.ndarray]:
             "pa": pa, "pA": 1.0 - pa, "pb": pb, "pB": 1.0 - pb}
 
 
+def round_mantissa(x: np.ndarray, bits: int = 30) -> np.ndarray:
+    """Round to ``bits`` mantissa bits so that last-bit differences between platforms' math
+    libraries do not change comparisons. Infinities and NaN pass through."""
+    m, e = np.frexp(x)
+    return np.ldexp(np.round(m * 2.0**bits) / 2.0**bits, e)
+
+
 def knn_graph(M: np.ndarray, k: int, kind: str = "symmetric") -> sp.csr_matrix:
     """Weighted k-NN term graph from a proximity matrix (larger = closer).
 
     Non-finite proximities never become neighbours; negative weights are clipped to zero.
+    Values are compared after :func:`round_mantissa`, and ties at the k-th place go to the
+    lowest term index, so the graph does not depend on the platform.
     ``symmetric``: edge if j is in kNN(i) or i in kNN(j); ``mutual``: both.
     """
     n = M.shape[0]
     M = np.array(M, dtype=np.float64, copy=True)
     M[~np.isfinite(M)] = -np.inf
     np.fill_diagonal(M, -np.inf)
+    M = round_mantissa(M)
     k = min(k, n - 1)
-    nbrs = np.argpartition(-M, k - 1, axis=1)[:, :k]
-    rows = np.repeat(np.arange(n), k)
-    w = M[rows, nbrs.ravel()]
+    neg = -M
+    kth = np.partition(neg, k - 1, axis=1)[:, k - 1: k]
+    tie = neg == kth
+    need = k - (neg < kth).sum(axis=1, keepdims=True)
+    rows, cols = np.nonzero((neg < kth) | (tie & (np.cumsum(tie, axis=1) <= need)))
+    w = M[rows, cols]
     w = np.where(np.isfinite(w), np.maximum(w, 0.0), 0.0)
-    A = sp.csr_matrix((w, (rows, nbrs.ravel())), shape=(n, n))
+    A = sp.csr_matrix((w, (rows, cols)), shape=(n, n))
     A.eliminate_zeros()
     if kind == "symmetric":
         W = A.maximum(A.T)

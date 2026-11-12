@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from math import fsum
+
 import numpy as np
 import scipy.sparse as sp
 from scipy.sparse.linalg import splu
+
+from .network import round_mantissa
 
 
 def initial_term_labels(X_lab: sp.csr_matrix, y_lab: np.ndarray, n_classes: int) -> np.ndarray:
@@ -30,8 +34,9 @@ def llgc(W: sp.spmatrix, Y: np.ndarray, alpha: float) -> np.ndarray:
 
 
 def classify_documents(X_docs: sp.csr_matrix, F: np.ndarray) -> np.ndarray:
-    """Eq. 2.9: document class score = sum of term frequency x term class information."""
-    return np.asarray(X_docs @ F).argmax(axis=1)
+    """Eq. 2.9: document class score = sum of term frequency x term class information.
+    Scores are rounded (:func:`round_mantissa`) and ties go to the lowest class index."""
+    return round_mantissa(np.asarray(X_docs @ F)).argmax(axis=1)
 
 
 def _per_class(y_true, y_pred, n_classes):
@@ -46,7 +51,7 @@ def _per_class(y_true, y_pred, n_classes):
 def weighted_f1(y_true, y_pred, n_classes: int) -> float:
     """Thesis Eqs. 4.1-4.3: harmonic mean of the support-weighted precision and recall."""
     prec, rec, w = _per_class(np.asarray(y_true), np.asarray(y_pred), n_classes)
-    p, r = float(w @ prec), float(w @ rec)
+    p, r = fsum(w * prec), fsum(w * rec)  # exactly rounded: same result on every platform
     return 0.0 if p + r == 0 else 2 * p * r / (p + r)
 
 
@@ -54,4 +59,4 @@ def weighted_mean_f1(y_true, y_pred, n_classes: int) -> float:
     """Support-weighted mean of per-class F1 (scikit-learn's ``average='weighted'``)."""
     prec, rec, w = _per_class(np.asarray(y_true), np.asarray(y_pred), n_classes)
     f1 = np.divide(2 * prec * rec, prec + rec, out=np.zeros_like(prec), where=prec + rec > 0)
-    return float(w @ f1)
+    return fsum(w * f1)

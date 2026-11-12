@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 from dataclasses import dataclass
+from math import fsum, sqrt
 
 import numpy as np
 
@@ -15,6 +16,17 @@ from .network import cooccurrence_stats, knn_graph, select_terms
 from .tctn import classify_documents, initial_term_labels, llgc, weighted_f1, weighted_mean_f1
 
 K_GRID = (1, 7, 17, 37, 57)
+
+
+def mean(xs) -> float:
+    """Exactly rounded mean (summation order cannot change the last bit across platforms)."""
+    xs = [float(x) for x in xs]
+    return fsum(xs) / len(xs)
+
+
+def sd(xs) -> float:
+    m = mean(xs)
+    return sqrt(fsum((float(x) - m) ** 2 for x in xs) / len(xs))
 ALPHA_GRID = (0.1, 0.3, 0.5, 0.7, 0.9)
 
 
@@ -74,8 +86,8 @@ class Task:
                     row[part] = weighted_f1(self.y[idx], pred, self.n_classes)
                     row[part + "_mean_f1"] = weighted_mean_f1(self.y[idx], pred, self.n_classes)
                 rows.append(row)
-            out[a] = {key: float(np.mean([r[key] for r in rows])) for key in rows[0]}
-            out[a]["test_sd"] = float(np.std([r["test"] for r in rows]))
+            out[a] = {key: mean([r[key] for r in rows]) for key in rows[0]}
+            out[a]["test_sd"] = sd([r["test"] for r in rows])
         return out
 
 
@@ -92,36 +104,50 @@ def grid_tctn(task: Task, measures=tuple(MEASURES), ks=K_GRID, alphas=ALPHA_GRID
     return {"best": best, "table": table}
 
 
+def ge_run(task: Task, config: GEConfig, k: int, alpha: float, run: int, seed: int,
+           fitness_splits: str = "one") -> dict:
+    """One GE-TCTN run for a fixed (k, alpha): evolve, then score the best function on all
+    splits. Fitness is the validation F1 on split ``run`` (``fitness_splits="one"``) or the
+    mean over all splits (``"all"``)."""
+    s = [run % len(task.splits)] if fitness_splits == "one" else None
+
+    def fitness(tree: Node) -> float:
+        return task.run(evaluate(tree, task.stats), k, [alpha], s)[alpha]["validation"]
+
+    res = evolve(fitness, config, seed=seed)
+    final = task.run(evaluate(res.best.tree, task.stats), k, [alpha])[alpha]
+    return {"k": k, "alpha": alpha, "run": run, "seed": seed, "fitness": res.best.fitness,
+            "function": res.best.phenotype, "evaluations": res.evaluations,
+            "history": res.history, **{"final_" + key: v for key, v in final.items()}}
+
+
+def summarize_ge(runs: list[dict]) -> dict:
+    """Pick the (k, alpha) with the best mean fitness over its runs (first in input order on
+    ties) and report its best-by-validation run, best test score and mean test score."""
+    combos: dict[tuple, list] = {}
+    for r in runs:
+        combos.setdefault((r["k"], r["alpha"]), []).append(r)
+    table = [{"k": k, "alpha": a, "mean_fitness": mean([x["fitness"] for x in rs]),
+              "runs": sorted(rs, key=lambda x: x["run"])} for (k, a), rs in combos.items()]
+    chosen = max(table, key=lambda c: c["mean_fitness"])
+    tests = [x["final_test"] for x in chosen["runs"]]
+    return {"k": chosen["k"], "alpha": chosen["alpha"],
+            "best_by_validation": max(chosen["runs"], key=lambda x: x["fitness"]),
+            "best_run_test": float(max(tests)),
+            "mean_test": mean(tests), "sd_test": sd(tests),
+            "combos": table}
+
+
 def ge_tctn(task: Task, config: GEConfig, ks=K_GRID, alphas=ALPHA_GRID, runs: int = 10,
             seed: int = 0, fitness_splits: str = "one", log=None) -> dict:
-    """GE-TCTN: for each (k, alpha), run GE `runs` times and keep the (k, alpha) with the
-    best mean fitness. Fitness is the validation F1 on split r for run r
-    (``fitness_splits="one"``) or the mean over all splits (``"all"``)."""
-    combos = []
+    """GE-TCTN: for each (k, alpha), run GE `runs` times (run r of pair ci uses seed
+    ``seed + 1000*ci + r``) and keep the (k, alpha) with the best mean fitness."""
+    results = []
     for ci, (k, a) in enumerate(itertools.product(ks, alphas)):
-        run_results = []
         for r in range(runs):
-            s = [r % len(task.splits)] if fitness_splits == "one" else None
-
-            def fitness(tree: Node, k=k, a=a, s=s) -> float:
-                return task.run(evaluate(tree, task.stats), k, [a], s)[a]["validation"]
-
-            res = evolve(fitness, config, seed=seed + 1000 * ci + r)
-            final = task.run(evaluate(res.best.tree, task.stats), k, [a])[a]
-            run_results.append({"run": r, "fitness": res.best.fitness,
-                                "function": res.best.phenotype, "evaluations": res.evaluations,
-                                **{"final_" + key: v for key, v in final.items()}})
+            res = ge_run(task, config, k, a, r, seed + 1000 * ci + r, fitness_splits)
+            results.append(res)
             if log:
-                log(f"k={k} alpha={a} run={r} fitness={res.best.fitness:.4f} "
-                    f"test={final['test']:.4f} f={res.best.phenotype}")
-        combos.append({"k": k, "alpha": a,
-                       "mean_fitness": float(np.mean([x["fitness"] for x in run_results])),
-                       "runs": run_results})
-    chosen = max(combos, key=lambda c: c["mean_fitness"])
-    tests = [x["final_test"] for x in chosen["runs"]]
-    best_by_val = max(chosen["runs"], key=lambda x: x["fitness"])
-    return {"k": chosen["k"], "alpha": chosen["alpha"],
-            "best_by_validation": best_by_val,
-            "best_run_test": float(max(tests)),
-            "mean_test": float(np.mean(tests)), "sd_test": float(np.std(tests)),
-            "combos": combos}
+                log(f"k={k} alpha={a} run={r} fitness={res['fitness']:.4f} "
+                    f"test={res['final_test']:.4f} f={res['function']}")
+    return summarize_ge(results)

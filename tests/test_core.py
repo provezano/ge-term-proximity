@@ -94,6 +94,16 @@ def test_knn_graph_symmetric_and_mutual():
     assert Wm[0, 1] == 3 and Wm[2, 3] == 5 and Wm.sum() == 16
 
 
+def test_knn_graph_breaks_ties_by_lowest_index():
+    M = np.ones((5, 5))
+    W = knn_graph(M, 2, "mutual").toarray()
+    # each row picks the two lowest other indices: 0->{1,2}, 1->{0,2}, 2->{0,1}, 3->{0,1}, 4->{0,1}
+    assert (W > 0).sum() == 6 and W[0, 1] and W[0, 2] and W[1, 2]
+    # values differing only in the last bits count as ties
+    M2 = M + np.random.default_rng(0).normal(0, 1e-15, M.shape)
+    assert np.array_equal(knn_graph(M2, 2, "mutual").toarray() > 0, W > 0)
+
+
 def test_knn_graph_ignores_nan_and_clips_negative():
     M = np.array([[0, np.nan, -1.0], [np.nan, 0, -2.0], [-1.0, -2.0, 0]])
     W = knn_graph(M, 1).toarray()
