@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the master's thesis it reimplements."
+title: "ge-term-proximity: grammatical evolution of proximity functions for term networks"
+type: software
+version: 0.1.0
+license: MIT
+authors:
+  - family-names: Coutinho
+    given-names: Felipe Provezano
+    orcid: "https://orcid.org/0000-0001-7206-5856"
+preferred-citation:
+  type: thesis
+  thesis-type: "Master's dissertation"
+  title: "Construção Automática de Funções de Proximidade para Redes de Termos usando Evolução Gramatical"
+  authors:
+    - family-names: Coutinho
+      given-names: Felipe Provezano
+      orcid: "https://orcid.org/0000-0001-7206-5856"
+  institution:
+    name: "Instituto de Ciências Matemáticas e de Computação, Universidade de São Paulo"
+    city: "São Carlos"
+    country: BR
+  year: 2019
+  doi: "10.11606/D.55.2020.tde-16032020-150627"
+  url: "https://teses.usp.br/teses/disponiveis/55/55134/tde-16032020-150627/"
