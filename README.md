@@ -75,7 +75,8 @@ ge-tctn evolve data/CSTR.arff --k 1,7 --alpha 0.1,0.5,0.9 \
 validation F1 over 10 random samples. `evolve` runs GE-TCTN. Its defaults are
 the thesis settings (population 100, 100 generations, crossover 0.75,
 mutation 0.10, tournament 5, elitism 2, 10 runs for each k and alpha), which
-cost about 11 CPU seconds per run on CSTR and far more on larger collections,
+cost about 11 CPU seconds per run on CSTR with one-sample fitness (about a
+minute with `--fitness-splits all`) and far more on larger collections,
 so the options above reduce them. `--fitness-splits all` computes each
 fitness on all ten validation samples instead of one (see item 9 below). Both
 commands print a one-line summary and
@@ -121,10 +122,33 @@ mean, while here the five measures all give 0.39 to 0.40. The random samples dif
 ones, and items 2, 3 and 7 of the list below may differ from the original
 code; any of these can move a mean on collections this small.
 
-GE-TCTN at the thesis budget (population 100, 100 generations, ten runs for
-each of the 25 values of (k, alpha), fitness averaged over the ten validation
-samples) on CSTR, Oh15 and Tr23 is running; its table will go here. Tr11 and
-Tr12 are left out of the GE comparison because of its cost.
+GE-TCTN was run at the thesis budget on CSTR, Tr23 and Oh15: population 100,
+100 generations, ten runs for each of the 25 values of (k, alpha), fitness
+averaged over the ten validation samples. That is 750 GE runs and about 130
+CPU-hours. Tr11 and Tr12 were left out to keep the cost down. As in the
+thesis, the (k, alpha) with the best mean fitness over its ten runs is kept.
+For that setting the table gives the test F1 of the run with the best
+validation fitness, the largest test F1 of the ten runs (the optimistic
+reading of "best of ten"), and the mean and sd of the ten runs. Gains are
+measured against Grid-TCTN from the same source: the thesis's against the
+thesis's, ours against ours.
+
+| collection | thesis GE best / mean (sd) | thesis gain best / mean | this code: best by validation / best by test / mean (sd) | gain here: best by validation / best by test / mean | k, alpha chosen here |
+|---|---|---|---|---|---|
+| CSTR | 0.7760 / 0.7467 (0.0110) | +0.032 / +0.002 | 0.7300 / 0.7418 / 0.7235 (0.0128) | +0.018 / +0.030 / +0.012 | 1, 0.9 |
+| Tr23 | 0.5305 / 0.5112 (0.0246) | +0.098 / +0.079 | 0.5734 / 0.5806 / 0.5004 (0.0558) | +0.145 / +0.152 / +0.072 | 1, 0.9 |
+| Oh15 | 0.7233 / 0.7170 (0.0062) | +0.004 / -0.002 | 0.7271 / 0.7271 / 0.7131 (0.0101) | +0.010 / +0.010 / -0.004 | 1, 0.7 |
+
+The thesis's GE gain is reproduced in direction on all three collections and
+in size on Tr23 and Oh15. On Tr23 the evolved functions beat the best
+classical measure by about 0.07 on average over runs, as in the thesis
+(0.08). On Oh15 GE gives no real gain, again as in the thesis. On CSTR GE is
+better than Grid-TCTN here as well, but the absolute numbers are lower:
+0.730 for the run chosen by validation against the thesis's 0.776. Our
+Grid-TCTN on CSTR is also 0.033 below the thesis, so much of that gap
+predates GE. Three collections and one set of samples are too few for a
+significance test, and none is claimed. The best function found on each
+collection and every run's history are in `validation/results/`.
 
 ## Deviations and assumptions
 
@@ -165,10 +189,10 @@ code. These are the places where this reimplementation had to choose.
 9. In GE-TCTN, run r of each (k, alpha) uses sample r for its fitness by
    default (`--fitness-splits one`). The thesis can also be read as using the
    mean over the ten samples, as Grid-TCTN does; `--fitness-splits all` does
-   that, at ten times the cost. The (k, alpha) pair with the best mean fitness
-   over its runs is kept.
+   that, at ten times the cost, and is what the full-budget validation above
+   uses. The (k, alpha) pair with the best mean fitness over its runs is kept.
 10. The thesis reports the "best individual of 10 runs". It does not say
-    whether "best" was judged on validation or on test data. The table below
+    whether "best" was judged on validation or on test data. The GE table above
     shows both: the run with the best validation fitness, and the largest test
     score over the runs. Only the first is a fair estimate.
 11. GE details the thesis leaves to PonyGE2 defaults: maximum initial tree

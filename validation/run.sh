@@ -2,8 +2,8 @@
 # Reproduce the validation tables of README.md. Expects the ARFF files from fetch_data.sh
 # in $1 (default: data) and writes results to $2 (default: results).
 # Grid-TCTN takes about a minute of CPU per collection. GE-TCTN at the thesis budget
-# (250 GE runs per collection) takes about 6 (CSTR), 12 (Oh15) and 30 (Tr23) CPU-hours on a
-# 2023 laptop core; set JOBS to the number of cores to use. Finished runs are skipped on restart.
+# (250 GE runs per collection) took 15 (CSTR), 36 (Oh15) and 80 (Tr23) CPU-hours here, on a mix of
+# laptop cores and cloud vCPUs; set JOBS to the number of cores to use. Finished runs are skipped on restart.
 set -euo pipefail
 data="${1:-data}"; out="${2:-results}"; jobs="${JOBS:-4}"
 here="$(cd "$(dirname "$0")" && pwd)"
