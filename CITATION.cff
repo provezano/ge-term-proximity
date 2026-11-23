@@ -3,7 +3,7 @@ message: "If you use this software, please cite the master's thesis it reimpleme
 title: "ge-term-proximity: grammatical evolution of proximity functions for term networks"
 type: software
 version: 0.1.0
-license: MIT
+license: "Apache-2.0"
 authors:
   - family-names: Coutinho
     given-names: Felipe Provezano
